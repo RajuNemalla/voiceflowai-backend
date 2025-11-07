@@ -5,6 +5,29 @@ import cors from "cors";
 import dotenv from "dotenv";
 dotenv.config();
 
+import { MongoClient } from "mongodb";
+
+let mongoClient;
+let remindersCollection;
+
+async function initMongo() {
+  if (!process.env.MONGODB_URI) {
+    console.warn("⚠️ MONGODB_URI not set — skipping DB connection");
+    return;
+  }
+
+  mongoClient = new MongoClient(process.env.MONGODB_URI);
+  await mongoClient.connect();
+
+  const db = mongoClient.db("voiceflowai");
+  remindersCollection = db.collection("reminders");
+  console.log("✅ MongoDB connected successfully");
+}
+
+// Connect Mongo when the server starts
+initMongo().catch(err => console.error("❌ Mongo init error:", err));
+
+
 const MONGODB_URI = process.env.MONGODB_URI;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
@@ -34,6 +57,24 @@ app.get("/api/config-check", (req, res) => {
 app.post("/api/command", (req, res) => {
   const { text } = req.body;
   res.json({ success: true, message: `You said: ${text || "nothing"}` });
+});
+// Create a new reminder and save to MongoDB
+app.post("/api/reminders", async (req, res) => {
+  if (!remindersCollection) return res.status(500).json({ error: "DB not ready" });
+
+  const { userId = "guest", text, when } = req.body;
+  if (!text) return res.status(400).json({ error: "Missing text" });
+
+  const reminder = {
+    userId,
+    text,
+    when: when || new Date().toISOString(),
+    createdAt: new Date(),
+    status: "pending"
+  };
+
+  const result = await remindersCollection.insertOne(reminder);
+  res.json({ success: true, id: result.insertedId, reminder });
 });
 
 // Start server
