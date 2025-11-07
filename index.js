@@ -77,6 +77,17 @@ app.post("/api/reminders", async (req, res) => {
   res.json({ success: true, id: result.insertedId, reminder });
 });
 
+// Get all reminders (optionally filter by userId)
+app.get("/api/reminders", async (req, res) => {
+  if (!remindersCollection) return res.status(500).json({ error: "DB not ready" });
+
+  const { userId } = req.query;
+  const filter = userId ? { userId } : {};
+
+  const reminders = await remindersCollection.find(filter).sort({ createdAt: -1 }).toArray();
+  res.json({ success: true, count: reminders.length, reminders });
+});
+
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ VoiceFlowAI running on port ${PORT}`));
