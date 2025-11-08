@@ -1,4 +1,6 @@
 // VoiceFlowAI — Step 1: Base Express Server
+
+import { parseIntent } from "./ai.js";
 import express from "express";
 import cors from "cors";
 
@@ -54,10 +56,31 @@ app.get("/api/config-check", (req, res) => {
 });
 
 // Placeholder endpoint for commands
-app.post("/api/command", (req, res) => {
+app.post("/api/command", async (req, res) => {
   const { text } = req.body;
-  res.json({ success: true, message: `You said: ${text || "nothing"}` });
+  if (!text) return res.status(400).json({ error: "text required" });
+
+  const intent = await parseIntent(text);
+
+  // Handle "create_reminder"
+  if (intent.action === "create_reminder") {
+    if (!remindersCollection)
+      return res.json({ success: true, intent, note: "DB not ready" });
+
+    const doc = {
+      userId: "anon",
+      text: intent.params.text || text,
+      when: intent.params.when || new Date().toISOString(),
+      createdAt: new Date(),
+      status: "pending"
+    };
+    const r = await remindersCollection.insertOne(doc);
+    return res.json({ success: true, id: r.insertedId, intent });
+  }
+
+  res.json({ success: false, intent });
 });
+
 // Create a new reminder and save to MongoDB
 app.post("/api/reminders", async (req, res) => {
   if (!remindersCollection) return res.status(500).json({ error: "DB not ready" });
