@@ -81,6 +81,53 @@ app.post("/api/command", async (req, res) => {
   res.json({ success: false, intent });
 });
 
+// Crypto price & Summarizer actions
+import fetch from "node-fetch";
+
+// Get crypto price
+app.post("/api/crypto", async (req, res) => {
+  const { symbol = "bitcoin" } = req.body;
+  try {
+    const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${symbol}&vs_currencies=usd`);
+    const data = await r.json();
+    res.json({ success: true, symbol, usd: data[symbol]?.usd });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Summarize URL
+app.post("/api/summarize", async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: "URL required" });
+
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+  if (!OPENAI_API_KEY) return res.status(400).json({ error: "OpenAI key missing" });
+
+  try {
+    const prompt = `Summarize the key points from this page: ${url}`;
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 250
+      })
+    });
+
+    const data = await response.json();
+    const summary = data?.choices?.[0]?.message?.content || "No summary available.";
+    res.json({ success: true, summary });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
 // Create a new reminder and save to MongoDB
 app.post("/api/reminders", async (req, res) => {
   if (!remindersCollection) return res.status(500).json({ error: "DB not ready" });
